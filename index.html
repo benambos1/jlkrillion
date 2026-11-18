@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>The J&amp;L Dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --pink:#ff5c8a; --cyan:#5fe3ff; --navy:#050a14; --panel:rgba(10,20,38,.92);
+  --line:#2a4a6e; --text:#dbe9ff; --muted:#7f98b8; --PX:0.55;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--navy);color:var(--text);
+  font-family:'Space Mono',ui-monospace,Menlo,monospace;-webkit-tap-highlight-color:transparent}
+button{font-family:inherit;cursor:pointer}
+
+/* ---------- world column ---------- */
+#world{position:fixed;inset:0;overflow:hidden}
+#column{position:absolute;left:0;right:0;top:0;will-change:transform;transition:transform 1.6s cubic-bezier(.45,.05,.2,1)}
+#sky{height:42vh;background:linear-gradient(#bfe3f6 0%,#d9eef7 70%,#e9f5f8 100%);position:relative;overflow:hidden}
+.cloud{position:absolute;background:#fff;opacity:.9;box-shadow:16px 0 #fff,32px 0 #fff,8px -10px #fff,24px -10px #fff,48px 0 #fff;width:16px;height:12px;animation:drift 60s linear infinite}
+@keyframes drift{from{transform:translateX(-120px)}to{transform:translateX(110vw)}}
+#boat{position:absolute;bottom:-4px;left:22%;width:150px;image-rendering:pixelated}
+#boat .flag{transform-origin:left center;animation:flap 1.2s steps(2) infinite}
+@keyframes flap{50%{transform:scaleX(.8)}}
+#water{position:relative;
+  background:linear-gradient(#2a6fa3 0px,#1b4f80 220px,#123a63 600px,#0b2442 1400px,#07162b 2400px,#050c1a 3200px,#03060e 4000px)}
+#surface{position:absolute;top:-6px;left:0;right:0;height:10px;
+  background:repeating-linear-gradient(90deg,#2a6fa3 0 18px,#3a82b8 18px 36px);opacity:.8}
+.marker{position:absolute;font-family:'VT323',monospace;font-size:18px;color:rgba(190,215,240,.45);letter-spacing:.06em;white-space:nowrap}
+.marker.l{left:8%} .marker.r{right:8%;text-align:right}
+.marker.zone{color:rgba(95,227,255,.55);font-size:22px}
+.ruler{position:absolute;right:14px;width:10px;border-right:1px solid rgba(160,200,240,.25)}
+.tick{position:absolute;right:0;width:8px;border-top:1px solid rgba(160,200,240,.35)}
+.tick span{position:absolute;right:12px;top:-8px;font-family:'VT323';font-size:13px;color:rgba(160,200,240,.4)}
+.fish{position:absolute;font-size:0;width:14px;height:6px;background:#0a1a2e;border-radius:50%;opacity:.7;animation:swim 18s linear infinite}
+.fish:after{content:"";position:absolute;right:-6px;top:0;border-left:6px solid #0a1a2e;border-top:3px solid transparent;border-bottom:3px solid transparent}
+@keyframes swim{from{transform:translateX(0)}to{transform:translateX(-110vw)}}
+#floor{position:absolute;left:0;right:0;height:120px;
+  background:repeating-linear-gradient(90deg,#0c1220 0 22px,#101a2c 22px 44px);border-top:3px solid #1c2a42}
+
+/* ---------- krill ---------- */
+#krill{opacity:0;position:fixed;left:50%;top:62%;transform:translate(-50%,-50%);z-index:5;pointer-events:none;
+  filter:drop-shadow(0 0 10px rgba(255,92,138,.7));transition:top .6s}
+body.diving-on #krill{opacity:1}
+#krill svg{width:34px;height:34px;animation:bob 2.2s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-6px) rotate(-6deg)}}
+#krill.diving svg{animation:spin .5s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:center;gap:clamp(10px,6vw,180px);
+  align-items:flex-start;padding:10px 10px 0;z-index:10;opacity:0;transition:opacity .5s;pointer-events:none}
+#hud.on{opacity:1}
+.box{background:var(--panel);border:2px solid #1d3250;padding:6px 14px 4px;min-width:104px;
+  clip-path:polygon(8px 0,calc(100% - 8px) 0,100% 8px,100% calc(100% - 8px),calc(100% - 8px) 100%,8px 100%,0 calc(100% - 8px),0 8px)}
+.box small{display:block;font-size:9px;letter-spacing:.3em;color:var(--muted)}
+.box b{font-family:'VT323';font-size:30px;font-weight:400;line-height:1}
+#depthVal{color:var(--cyan)} #scoreVal{color:var(--pink)}
+#score-box{text-align:right}
+#progress{display:flex;flex-direction:column;align-items:center;gap:5px;padding-top:12px}
+#squares{display:flex;gap:4px}
+#squares i{width:14px;height:14px;background:#0e1c30;border:1px solid #233b5c;display:block}
+#squares i.done{background:var(--cyan);border-color:var(--cyan)}
+#squares i.cur{background:var(--pink);border-color:#fff;box-shadow:0 0 8px var(--pink)}
+#squares i.baby{background:#ffd34e;border-color:#ffd34e}
+#progLabel{font-size:9px;letter-spacing:.3em;color:#6c86a8}
+
+/* ---------- screens ---------- */
+.screen{position:fixed;inset:0;z-index:20;display:none;flex-direction:column;align-items:center}
+.screen.on{display:flex}
+
+/* intro */
+#intro{justify-content:flex-start;padding-top:12vh;text-align:center}
+.title{font-family:'Silkscreen',monospace;font-weight:700;font-size:clamp(40px,10vw,96px);letter-spacing:.06em;
+  color:transparent;-webkit-text-stroke:2px #fff;
+  text-shadow:-4px 0 var(--pink),4px 0 var(--cyan);line-height:1}
+.title .amp{-webkit-text-stroke:2px #fff}
+.subtitle{margin-top:18px;font-family:'Silkscreen';font-size:clamp(13px,2.6vw,20px);letter-spacing:.55em;color:#2a9fd1}
+.tagline{margin-top:16px;font-size:clamp(11px,2.2vw,14px);letter-spacing:.12em;color:#5f7896}
+#introLower{position:absolute;top:calc(42vh + 40px);left:50%;transform:translateX(-50%);width:min(560px,92vw);text-align:left}
+#howBtn{background:none;border:0;color:#8fb0d0;font-size:11px;letter-spacing:.3em}
+#how{display:none;margin:12px 0 14px;font-family:'VT323';font-size:20px;line-height:1.35;color:#bcd4ef;letter-spacing:.04em}
+#how.on{display:block}
+#how em{color:var(--pink);font-style:normal}
+.big-btn{display:block;width:100%;margin-top:14px;padding:20px;background:#0b1a30;color:#e6f6ff;
+  border:3px solid var(--cyan);box-shadow:0 0 18px rgba(95,227,255,.35),inset 0 0 18px rgba(95,227,255,.12);
+  font-family:'Silkscreen';font-size:clamp(16px,3.6vw,24px);letter-spacing:.25em;transition:transform .1s,background .2s}
+.big-btn:hover{background:#10264a}
+.big-btn:active{transform:scale(.98)}
+.foot{display:flex;justify-content:space-between;margin-top:10px;font-size:10px;letter-spacing:.25em;color:#58739a}
+.badge{display:inline-block;margin-top:22px;border:2px solid var(--pink);color:var(--pink);padding:8px 12px;font-size:11px;letter-spacing:.25em;background:rgba(30,8,20,.6)}
+
+/* play */
+#play{justify-content:space-between;pointer-events:none}
+#card{pointer-events:auto;margin-top:clamp(96px,22vh,200px);width:min(470px,92vw);background:var(--panel);border:2px solid #1d3250;
+  padding:22px 24px 18px;transition:transform .4s,opacity .4s;
+  clip-path:polygon(10px 0,calc(100% - 10px) 0,100% 10px,100% calc(100% - 10px),calc(100% - 10px) 100%,10px 100%,0 calc(100% - 10px),0 10px)}
+#card.out{opacity:0;transform:translateY(-20px)}
+#card.final{border-color:#ffd34e;box-shadow:0 0 30px rgba(255,211,78,.3)}
+#cardLabel{font-size:11px;letter-spacing:.3em;color:var(--pink)}
+#card.final #cardLabel{color:#ffd34e}
+#promptText{font-family:'Space Mono';font-weight:700;font-size:clamp(20px,4.4vw,27px);margin:10px 0 12px;line-height:1.2}
+#cardHint{font-size:11px;letter-spacing:.15em;color:#6e88a8}
+#inputRow{pointer-events:auto;width:min(600px,96vw);display:flex;align-items:center;gap:10px;margin-bottom:calc(22px + env(safe-area-inset-bottom));transition:opacity .3s}
+#inputRow.hide{opacity:0;pointer-events:none}
+#timer{position:relative;width:58px;height:58px;flex:none}
+#timer svg{width:58px;height:58px;transform:rotate(-90deg)}
+#timer circle{fill:#08142a;stroke:#173252;stroke-width:4}
+#timer #ring{fill:none;stroke:var(--cyan);stroke-width:4;stroke-dasharray:157;transition:stroke-dashoffset 1s linear,stroke .3s}
+#timer b{position:absolute;inset:0;display:grid;place-items:center;font-family:'VT323';font-size:26px;font-weight:400;color:var(--cyan)}
+#timer.low #ring{stroke:var(--pink)} #timer.low b{color:var(--pink)}
+#answer{flex:1;min-width:0;height:56px;background:#08142a;border:2px solid #2aa9d6;color:#fff;padding:0 16px;
+  font-family:'Space Mono';font-size:17px;outline:none}
+#answer::placeholder{color:#55708f}
+#answer:focus{box-shadow:0 0 14px rgba(95,227,255,.35)}
+#diveBtn{height:56px;padding:0 20px;background:#b8466a;color:#fff;border:2px solid #ff7aa0;font-family:'Silkscreen';font-size:18px;letter-spacing:.12em}
+#diveBtn:active{transform:scale(.97)}
+
+/* result tag */
+#result{position:fixed;left:50%;top:62%;transform:translate(-50%,-50%);z-index:6;display:none;flex-direction:column;align-items:center;gap:10px;pointer-events:none}
+#result.on{display:flex}
+#ansPill{margin-top:56px;background:var(--panel);border:2px solid #1d3250;padding:8px 18px;font-family:'Silkscreen';font-size:clamp(15px,3.4vw,20px);letter-spacing:.12em;color:var(--cyan);text-transform:uppercase;max-width:90vw;text-align:center}
+#tier{font-family:'VT323';font-size:clamp(22px,4.6vw,30px);letter-spacing:.12em;color:#fff;text-shadow:0 0 10px rgba(95,227,255,.6);text-align:center}
+#tier.gold{color:#ffd34e;text-shadow:0 0 14px rgba(255,211,78,.9)}
+#tier.miss{color:#8aa}
+.pop{animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pop{from{transform:scale(.4);opacity:0}}
+
+/* reveal */
+#reveal{z-index:40;justify-content:center;background:radial-gradient(ellipse at center,rgba(8,16,32,.75),rgba(3,6,14,.96));padding:20px;overflow-y:auto}
+#revealInner{width:min(560px,94vw);text-align:center;margin:auto}
+.r-kicker{font-family:'Space Mono',monospace;font-weight:700;font-size:clamp(12px,3vw,15px);letter-spacing:.3em;color:#ffd34e}
+.r-head{margin:14px 0 4px;font-family:'Space Mono',ui-monospace,monospace;font-weight:700;font-size:clamp(26px,6.5vw,44px);line-height:1.15;color:#fff;letter-spacing:.02em}
+.r-name{margin:10px 0 0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-weight:800;font-size:clamp(46px,13vw,84px);line-height:1;letter-spacing:.01em;color:#fff;text-shadow:0 0 28px rgba(95,227,255,.45)}
+.r-line{margin-top:10px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-weight:700;font-size:clamp(22px,6vw,36px);line-height:1.2;color:#dbe9ff}
+.r-line span{color:#ffd34e}
+.r-sub{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:clamp(16px,4vw,20px);color:#a9c2de}
+.r-sub b{color:#ffd34e;font-weight:400}
+.r-wrong{font-family:'VT323';font-size:20px;color:#ff9db8;margin-bottom:10px}
+#babyArt{margin:18px auto 0;width:96px;height:96px;animation:bob 2.4s ease-in-out infinite}
+.r-table{margin:26px auto 0;width:100%;border-collapse:collapse;font-size:14px;text-align:left;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+.r-table td{padding:9px 6px;border-top:1px solid #1a2d48;color:#dbe9ff}
+.r-table td:first-child{color:#8ea6c4;width:50%}
+.r-table td.pts{text-align:right;color:var(--pink);font-family:'VT323';font-size:20px;white-space:nowrap}
+.r-table tr.baby td{color:#ffd34e} .r-table tr.baby td.pts{color:#ffd34e}
+.r-total{margin-top:14px;display:flex;justify-content:space-between;font-family:'VT323';font-size:24px;color:var(--cyan);border-top:2px solid #2a4a6e;padding-top:10px}
+.r-note{margin-top:18px;font-size:11px;letter-spacing:.2em;color:#58739a}
+#copyBtn{margin-top:18px;padding:12px 18px;background:transparent;border:2px solid var(--pink);color:var(--pink);font-family:'Silkscreen';font-size:13px;letter-spacing:.2em}
+#confetti{position:fixed;inset:0;z-index:39;pointer-events:none}
+
+.shake{animation:shake .6s}
+@keyframes shake{20%{transform:translate(-6px,3px)}40%{transform:translate(6px,-3px)}60%{transform:translate(-4px,2px)}80%{transform:translate(4px,-1px)}}
+@media (max-width:520px){
+  .box{min-width:84px;padding:5px 10px 3px} .box b{font-size:24px}
+  #squares i{width:11px;height:11px}
+  #diveBtn{padding:0 12px;font-size:15px}
+}
+</style>
+</head>
+<body>
+
+<div id="world"><div id="column">
+  <div id="sky">
+    <div class="cloud" style="top:12%;animation-duration:80s;animation-delay:-20s"></div>
+    <div class="cloud" style="top:28%;transform:scale(1.6);animation-duration:110s;animation-delay:-70s"></div>
+    <div class="cloud" style="top:8%;animation-duration:95s;animation-delay:-45s"></div>
+    <svg id="boat" viewBox="0 0 50 30" shape-rendering="crispEdges">
+      <g fill="#0b1626">
+        <rect x="23" y="2" width="2" height="18"/>
+        <rect x="16" y="12" width="14" height="6"/>
+        <rect x="2" y="18" width="46" height="5"/>
+        <rect x="5" y="23" width="40" height="3"/>
+        <rect x="9" y="26" width="32" height="2"/>
+        <rect x="44" y="15" width="4" height="3"/>
+      </g>
+      <rect class="flag" x="25" y="2" width="8" height="5" fill="#ff5c8a"/>
+      <g fill="#e9f5f8"><rect x="19" y="14" width="2" height="2"/><rect x="23" y="14" width="2" height="2"/><rect x="27" y="14" width="2" height="2"/></g>
+    </svg>
+  </div>
+  <div id="water"><div id="surface"></div></div>
+</div></div>
+
+<div id="krill" aria-hidden="true">
+  <svg viewBox="0 0 16 16" shape-rendering="crispEdges">
+    <g fill="#ff5c8a">
+      <rect x="5" y="3" width="6" height="2"/><rect x="3" y="5" width="2" height="2"/><rect x="11" y="5" width="2" height="4"/>
+      <rect x="3" y="7" width="2" height="2"/><rect x="5" y="9" width="6" height="2"/><rect x="9" y="11" width="2" height="2"/>
+      <rect x="6" y="12" width="3" height="2"/><rect x="2" y="2" width="1" height="3"/><rect x="1" y="1" width="1" height="1"/>
+    </g>
+    <rect x="6" y="5" width="1" height="1" fill="#fff"/>
+  </svg>
+</div>
+
+<div id="hud">
+  <div class="box"><small>DEPTH</small><b id="depthVal">0m</b></div>
+  <div id="progress"><div id="squares"></div><div id="progLabel">PROMPT 1 OF 7</div></div>
+  <div class="box" id="score-box"><small>SCORE</small><b id="scoreVal">0</b></div>
+</div>
+
+<!-- INTRO -->
+<section class="screen on" id="intro">
+  <h1 class="title">J<span class="amp">&amp;</span>L DIVE</h1>
+  <div class="subtitle">THE ONE-TIME DIVE</div>
+  <div class="tagline">7 prompts · 25 seconds each · rarer answers sink deeper</div>
+  <div id="introLower">
+    <button id="howBtn">► HOW TO PLAY</button>
+    <div id="how">
+      7 PROMPTS. SAME FOR EVERYONE.<br>
+      25 SECONDS TO NAME ONE THING.<br>
+      RARE ANSWERS SCORE BIG. OBVIOUS ONES FLOAT.<br>
+      EVERY POINT SINKS YOU 10 METRES. 700 IS THE TRENCH.<br>
+      <em>ONE DIVE ONLY. NO SECOND CHANCES.</em>
+    </div>
+    <button class="big-btn" id="beginBtn">▼ BEGIN DESCENT ▼</button>
+    <div class="foot"><span>DIVE #001 · J&amp;L EDITION</span><span>TIPP CITY, OH</span></div>
+  </div>
+</section>
+
+<!-- PLAY -->
+<section class="screen" id="play">
+  <div id="card">
+    <div id="cardLabel">PROMPT 1 OF 7</div>
+    <div id="promptText">…</div>
+    <div id="cardHint">▼ rarer answers sink deeper ▼</div>
+  </div>
+  <form id="inputRow" autocomplete="off">
+    <div id="timer"><svg viewBox="0 0 58 58"><circle cx="29" cy="29" r="25"/><circle id="ring" cx="29" cy="29" r="25"/></svg><b id="timerVal">25</b></div>
+    <input id="answer" type="text" placeholder="type one answer…" maxlength="40" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
+    <button id="diveBtn" type="submit">DIVE</button>
+  </form>
+</section>
+
+<div id="result"><div id="ansPill"></div><div id="tier"></div></div>
+
+<canvas id="confetti"></canvas>
+
+<!-- REVEAL -->
+<section class="screen" id="reveal"><div id="revealInner"></div></section>
+
+<script>
+(() => {
+const STORE_KEY = 'jl-dive-dad-v2';
+const PX = 0.55;           // screen px per metre
+const MAX_DEPTH = 7000;    // 700 pts * 10m
+const TIME = 25;
+
+/* -------- prompts -------- */
+// commons: normalized answer -> points (lower = more people said it)
+const PROMPTS = [
+  { q:"Name a type of wood", commons:{
+      oak:6, pine:8, maple:14, cedar:18, birch:26, walnut:24, cherry:28, poplar:38, spruce:34, ash:40,
+      hickory:42, mahogany:30, redwood:36, teak:40, cottonwood:66, beech:58, balsa:48, ebony:52, elm:46, fir:44,
+      douglasfir:50, sycamore:58, sassafras:88, basswood:72, hemlock:62, aspen:52, willow:48, bamboo:44, plywood:20, osb:55 } },
+  { q:"Name something that ships on a pallet", commons:{
+      boxes:6, box:6, water:16, bottledwater:18, cases:20, food:22, groceries:30, bricks:28, mulch:38, tires:40,
+      appliances:42, furniture:36, paper:44, cardboard:40, drywall:52, beer:26, soda:28, pop:30, cement:44, concrete:46,
+      shingles:58, lumber:50, wood:30, pallets:62, steel:50, salt:62, dogfood:56, toiletpaper:48 } },
+  { q:"Name a tool in a woodshop", commons:{
+      hammer:6, saw:8, drill:12, tablesaw:16, tapemeasure:24, nailgun:28, sander:30, chisel:38, bandsaw:40,
+      circularsaw:30, mitersaw:34, jigsaw:36, router:44, clamp:46, clamps:46, level:44, screwdriver:30,
+      planer:56, jointer:62, lathe:58, forklift:60, pencil:52, square:50, speedsquare:60, crowbar:52, prybar:56 } },
+  { q:"Name something made out of wood", commons:{
+      table:6, chair:8, pallet:14, pallets:14, house:18, desk:20, door:22, fence:20, deck:22, bat:26, baseballbat:26,
+      pencil:24, cabinet:30, cabinets:30, bed:30, toothpick:34, shed:34, bench:32, guitar:40, boat:40, barn:38, crate:42,
+      bookshelf:40, dresser:42, cuttingboard:44, spoon:46, paper:44, frame:46, picket:56, canoe:56, barrel:58, bowl:58,
+      cribbageboard:70, rollingpin:62, chopsticks:52, coffin:60, ladder:52, birdhouse:58, totempole:84, mallet:64, clog:80, clogs:80 } },
+  { q:"Name a part of a pallet", commons:{
+      board:8, boards:8, nail:8, nails:8, stringer:18, deckboard:26, block:30, blocks:30, topboard:36, bottomboard:40,
+      leadboard:70, deck:34, topdeck:42, bottomdeck:46, notch:60, notches:60, chamfer:84, stringerboard:52, fork:44, forkopening:66,
+      runner:62, slat:40, slats:40, screw:50, staple:66, heattreatstamp:90, stamp:76, ippc:92, ispm15:94, mark:72, wing:82, bearer:86 } },
+  { q:"Name something wooden you'd find in a nursery", commons:{
+      crib:6, rockingchair:14, rocker:18, dresser:20, toys:24, blocks:22, toyblocks:24, changingtable:28, bookshelf:32,
+      shelf:34, shelves:34, toybox:36, toychest:36, glider:48, cradle:40, bassinet:52, door:44, floor:46, frame:50, pictureframe:50,
+      nightstand:56, mobile:62, puzzle:58, rattle:60, hamper:66, doorframe:70, trim:76, nameplate:74, growthchart:82, highchair:58 } },
+  { q:"Name a J&L employee who is going to be a dad", final:true }
+];
+
+/* -------- helpers -------- */
+const $ = id => document.getElementById(id);
+const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+const tokens = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z ]/g,' ').split(/\s+/).filter(Boolean);
+function hash(str){let h=2166136261;for(const c of str){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+function isBen(raw){
+  const t = tokens(raw);
+  if(!t.length) return false;
+  const ok = ['ben','benjamin','ambos','benny','benji'];
+  return t.some(w => ok.includes(w)) || norm(raw).startsWith('benambos') || norm(raw).startsWith('benjaminambos');
+}
+function scoreFor(p, raw){
+  const n = norm(raw);
+  if(!n) return 0;
+  const c = p.commons;
+  if(c[n] != null) return c[n];
+  if(n.endsWith('s') && c[n.slice(0,-1)] != null) return c[n.slice(0,-1)];
+  if(c[n+'s'] != null) return c[n+'s'];
+  if(n.length < 2) return 3;
+  return 55 + (hash(n) % 38); // unknown = fairly rare, 55-92
+}
+function tierFor(pts){
+  if(pts <= 0) return 'SUNK NOTHING';
+  if(pts <= 20) return 'FLOATER';
+  if(pts <= 40) return 'SCHOOLER';
+  if(pts <= 60) return 'DRIFTER';
+  if(pts <= 80) return 'LURKER';
+  return 'ANGLER';
+}
+const fmt = m => Math.round(m).toLocaleString('en-US') + 'm';
+const store = {
+  get(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)||'null') }catch(e){ return null } },
+  set(v){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(v)) }catch(e){} },
+  clear(){ try{ localStorage.removeItem(STORE_KEY) }catch(e){} }
+};
+
+/* -------- build water column -------- */
+const water = $('water');
+water.style.height = (MAX_DEPTH*PX + 700) + 'px';
+const MARKERS = [
+  [130,'l','── light begins to fade'],
+  [200,'r','most sunlight stops here ──'],
+  [332,'r','deepest scuba dive ever — 332m ──'],
+  [500,'l','── sperm whales hunt below here'],
+  [1000,'l','── THE MIDNIGHT ZONE','zone'],
+  [1200,'r','≈ 8,500 pallets stacked tall ──'],
+  [1600,'r','anglerfish territory ──'],
+  [2200,'l','── giant squid territory'],
+  [2800,'r','2°C and utterly black ──'],
+  [3800,'l','── the Titanic rests here — 3,800m'],
+  [4000,'r','THE ABYSSAL ZONE ──','zone'],
+  [5000,'l','── the abyssal plain stretches out'],
+  [6000,'r','THE HADAL ZONE ──','zone'],
+  [6500,'l','── named for Hades. fitting.'],
+  [7000,'r','the trench floor — a perfect dive ends here ──'],
+];
+for(const [m,side,txt,cls] of MARKERS){
+  const d=document.createElement('div');
+  d.className='marker '+side+(cls?' '+cls:'');
+  d.style.top=(m*PX)+'px'; d.textContent=txt; water.appendChild(d);
+}
+const ruler=document.createElement('div'); ruler.className='ruler';
+ruler.style.top='0'; ruler.style.height=(MAX_DEPTH*PX)+'px'; water.appendChild(ruler);
+for(let m=0;m<=MAX_DEPTH;m+=500){
+  const t=document.createElement('div'); t.className='tick'; t.style.top=(m*PX)+'px';
+  t.innerHTML='<span>-'+m+'m</span>'; ruler.appendChild(t);
+}
+for(let i=0;i<26;i++){
+  const f=document.createElement('div'); f.className='fish';
+  f.style.top=(40+Math.random()*(MAX_DEPTH*PX*0.6))+'px';
+  f.style.left=(100+Math.random()*30)+'vw';
+  f.style.animationDuration=(14+Math.random()*22)+'s';
+  f.style.animationDelay=(-Math.random()*30)+'s';
+  water.appendChild(f);
+}
+const floor=document.createElement('div'); floor.id='floor'; floor.style.top=(MAX_DEPTH*PX+30)+'px'; water.appendChild(floor);
+
+/* -------- camera -------- */
+function camera(depth){
+  const skyH = $('sky').offsetHeight;
+  const krillY = innerHeight*0.62;
+  // at depth 0 keep the sky in view; once diving, pin the current depth to the krill
+  const y = depth<=0 ? 0 : Math.max(0, skyH + depth*PX - krillY);
+  $('column').style.transform = `translateY(${-y}px)`;
+  const kTop = depth<=0 ? skyH + 26 : krillY;
+  $('krill').style.top = kTop+'px';
+  $('result').style.top = kTop+'px';
+}
+addEventListener('resize',()=>camera(state.depth));
+
+/* -------- state -------- */
+const state = { i:0, score:0, depth:0, results:[], timer:null, left:TIME, locked:false };
+
+function buildSquares(){
+  const sq=$('squares'); sq.innerHTML='';
+  PROMPTS.forEach((_,k)=>{const i=document.createElement('i'); sq.appendChild(i)});
+}
+function paintSquares(){
+  [...$('squares').children].forEach((el,k)=>{
+    el.className = k<state.i ? (PROMPTS[k].final?'baby':'done') : (k===state.i?'cur':'');
+  });
+  $('progLabel').textContent = `PROMPT ${Math.min(state.i+1,7)} OF 7`;
+}
+function animateNumber(el, from, to, ms, f){
+  const t0=performance.now();
+  const step=t=>{const k=Math.min(1,(t-t0)/ms);const e=1-Math.pow(1-k,3);el.textContent=f(from+(to-from)*e);if(k<1)requestAnimationFrame(step)};
+  requestAnimationFrame(step);
+}
+
+/* -------- flow -------- */
+function begin(){
+  if(store.get()){ showReveal(store.get(), true); return; }
+  // lock immediately: one dive only, even if they bail halfway
+  store.set({ started:true, results:[], score:0, done:false });
+  $('intro').classList.remove('on');
+  $('hud').classList.add('on'); document.body.classList.add('diving-on');
+  $('play').classList.add('on');
+  buildSquares();
+  setTimeout(()=>{ state.depth = 1; camera(state.depth); showPrompt(); }, 150);
+}
+
+function showPrompt(){
+  const p = PROMPTS[state.i];
+  paintSquares();
+  const card=$('card');
+  card.classList.toggle('final', !!p.final);
+  $('cardLabel').textContent = p.final ? 'FINAL PROMPT · 7 OF 7' : `PROMPT ${state.i+1} OF 7`;
+  $('promptText').textContent = p.q;
+  $('cardHint').textContent = p.final ? '▼ only one right answer down here ▼' : '▼ rarer answers sink deeper ▼';
+  card.classList.remove('out');
+  $('inputRow').classList.remove('hide');
+  $('result').classList.remove('on');
+  const a=$('answer'); a.value=''; a.disabled=false;
+  setTimeout(()=>a.focus({preventScroll:true}),60);
+  state.locked=false;
+  startTimer();
+}
+
+function startTimer(){
+  clearInterval(state.timer);
+  state.left = TIME;
+  const ring=$('ring'), tv=$('timerVal'), tm=$('timer');
+  ring.style.transition='none'; ring.style.strokeDashoffset=0;
+  requestAnimationFrame(()=>{ring.style.transition=''});
+  tv.textContent=TIME; tm.classList.remove('low');
+  state.timer=setInterval(()=>{
+    state.left--;
+    tv.textContent=Math.max(0,state.left);
+    ring.style.strokeDashoffset = 157*(1-state.left/TIME);
+    if(state.left<=5) tm.classList.add('low');
+    if(state.left<=0){ clearInterval(state.timer); submit(true); }
+  },1000);
+}
+
+function submit(timedOut){
+  if(state.locked) return;
+  state.locked=true;
+  clearInterval(state.timer);
+  const raw = timedOut ? $('answer').value : $('answer').value;
+  const p = PROMPTS[state.i];
+  $('answer').disabled=true; $('answer').blur();
+  $('card').classList.add('out');
+  $('inputRow').classList.add('hide');
+
+  let pts, tier, gold=false, correct=null;
+  if(p.final){
+    correct = isBen(raw);
+    if(correct){ pts = Math.max(100, 700 - state.score); tier='🍼 ONE IN A KRILLION · STRAIGHT TO THE TRENCH'; gold=true; }
+    else { pts = 0; tier = raw.trim() ? 'NOPE. WRONG DAD.' : 'SUNK NOTHING'; }
+  } else {
+    pts = scoreFor(p, raw);
+    tier = raw.trim() ? `${tierFor(pts)} · ${pts}` : 'SUNK NOTHING · 0';
+  }
+
+  const shown = raw.trim() ? `"${raw.trim()}"` : '— no answer —';
+  state.results.push({ q:p.q, a:raw.trim(), pts, tier:tier.replace(/ · \d+$/,''), final:!!p.final, correct });
+
+  const from = state.depth, fromScore = state.score;
+  state.score += pts;
+  state.depth = Math.min(MAX_DEPTH, state.score*10) || 1;
+
+  $('ansPill').textContent = shown;
+  const t=$('tier'); t.textContent=''; t.className='';
+  $('result').classList.add('on');
+  $('krill').classList.add('diving');
+  camera(state.depth);
+  animateNumber($('depthVal'), from, state.depth, 1600, fmt);
+  animateNumber($('scoreVal'), fromScore, state.score, 1600, v=>Math.round(v));
+
+  setTimeout(()=>{
+    $('krill').classList.remove('diving');
+    t.textContent = tier;
+    t.className = 'pop' + (gold?' gold':'') + (pts===0?' miss':'');
+    if(gold) document.body.classList.add('shake');
+  }, 1500);
+
+  // persist progress
+  store.set({ started:true, results:state.results, score:state.score, done:false });
+
+  setTimeout(()=>{
+    document.body.classList.remove('shake');
+    state.i++;
+    if(state.i < PROMPTS.length) showPrompt();
+    else finish();
+  }, p.final ? 3600 : 3000);
+}
+
+function finish(){
+  paintSquares();
+  const final = state.results[state.results.length-1];
+  const data = { started:true, done:true, results:state.results, score:state.score, correct:!!final.correct };
+  store.set(data);
+  showReveal(data, false);
+}
+
+function showReveal(data, returning){
+  $('intro').classList.remove('on');
+  $('play').classList.remove('on');
+  $('result').classList.remove('on');
+  $('hud').classList.remove('on');
+  state.score = data.score||0; state.depth = Math.min(MAX_DEPTH, state.score*10);
+  camera(Math.max(1,state.depth));
+
+  const unfinished = !data.done;
+  const rows = (data.results||[]).map(r=>`
+    <tr class="${r.final?'baby':''}"><td>${esc(r.q)}</td><td>${r.a?esc(r.a):'<i style="opacity:.5">—</i>'}</td><td class="pts">+${r.pts}</td></tr>`).join('');
+
+  const babySvg = `<svg id="babyArt" viewBox="0 0 24 24" shape-rendering="crispEdges">
+    <rect x="9" y="1" width="6" height="2" fill="#5fe3ff"/>
+    <rect x="8" y="3" width="8" height="2" fill="#dbe9ff"/>
+    <rect x="7" y="5" width="10" height="14" fill="#dbe9ff"/>
+    <rect x="7" y="9" width="10" height="2" fill="#ff5c8a"/>
+    <rect x="7" y="13" width="10" height="2" fill="#ff5c8a"/>
+    <rect x="8" y="19" width="8" height="2" fill="#dbe9ff"/>
+    <rect x="9" y="6" width="1" height="11" fill="#fff" opacity=".7"/>
+    <rect x="13" y="6" width="2" height="1" fill="#7f98b8"/><rect x="13" y="8" width="2" height="1" fill="#7f98b8"/>
+    <rect x="13" y="12" width="2" height="1" fill="#7f98b8"/><rect x="13" y="16" width="2" height="1" fill="#7f98b8"/>
+  </svg>`;
+
+  let top;
+  if(unfinished){
+    top = `<div class="r-kicker">YOU SURFACED EARLY</div>
+      <div class="r-head">DIVE<br>ABANDONED</div>
+      <div class="r-sub">It's a one-time dive, so we'll just tell you…</div>`;
+  } else if(data.correct){
+    top = `<div class="r-kicker">🍼 ONE IN A KRILLION 🍼</div>`;
+  } else {
+    top = `<div class="r-kicker">THE CORRECT ANSWER WAS…</div>`;
+  }
+
+  $('revealInner').innerHTML = `
+    ${top}
+    ${babySvg}
+    <div class="r-name">Ben Ambos</div>
+    <div class="r-line">is going to be a <span>dad!</span></div>
+    <div class="r-sub" style="margin-top:12px">J&amp;L's newest little krill is <b>on the way</b>.</div>
+    ${(!unfinished && !data.correct && final_a(data)) ? `<div class="r-wrong" style="margin-top:12px">(you said "${esc(final_a(data))}" — bold guess)</div>`:''}
+    <table class="r-table">${rows}</table>
+    <div class="r-total"><span>FINAL DEPTH</span><span>${fmt(Math.min(MAX_DEPTH,(data.score||0)*10))} · ${data.score||0} PTS</span></div>
+    <button id="copyBtn">COPY MY DIVE</button>
+    <div class="r-note" id="resetNote" style="user-select:none;cursor:default">${returning ? "YOU'VE ALREADY TAKEN YOUR DIVE. " : ''}ONE DIVE ONLY · GO CONGRATULATE BEN</div>`;
+  $('reveal').classList.add('on');
+  $('copyBtn').onclick = ()=>copyResults(data);
+  // hidden host reset: tap the footer note 5 times quickly
+  let taps=0, tt; $('resetNote').onclick=()=>{ taps++; clearTimeout(tt); tt=setTimeout(()=>taps=0,1500);
+    if(taps>=5){ store.clear(); location.reload(); } };
+  if(!unfinished) confetti(returning ? 2500 : 7000);
+}
+function final_a(d){ const r=(d.results||[]).find(x=>x.final); return r && r.a }
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+function copyResults(d){
+  const sq = (d.results||[]).map(r=> r.final ? (r.correct?'🍼':'❌') : r.pts>=81?'🟪':r.pts>=41?'🟦':r.pts>0?'⬜':'⬛').join('');
+  const txt = `The J&L Dive 🦐 ${fmt(Math.min(MAX_DEPTH,(d.score||0)*10))}\n${sq}\nTurns out Ben's going to be a dad! 🍼`;
+  const btn=$('copyBtn');
+  const done=()=>{btn.textContent='COPIED ✓'; setTimeout(()=>btn.textContent='COPY MY DIVE',1800)};
+  try{
+    navigator.clipboard.writeText(txt).then(done).catch(()=>fallbackCopy(txt,done));
+  }catch(e){ fallbackCopy(txt,done) }
+}
+function fallbackCopy(txt,done){
+  const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select();
+  try{document.execCommand('copy'); done()}catch(e){} ta.remove();
+}
+
+/* -------- confetti -------- */
+function confetti(ms){
+  const c=$('confetti'), ctx=c.getContext('2d');
+  const dpr=Math.min(2,devicePixelRatio||1);
+  c.width=innerWidth*dpr; c.height=innerHeight*dpr; ctx.scale(dpr,dpr);
+  const colors=['#ff5c8a','#5fe3ff','#ffd34e','#ffffff','#9dffb0'];
+  const parts=[]; const end=performance.now()+ms;
+  function spawn(n){for(let i=0;i<n;i++)parts.push({x:Math.random()*innerWidth,y:-20-Math.random()*60,vx:(Math.random()-.5)*2,vy:2+Math.random()*3,s:4+Math.random()*6,c:colors[i%colors.length],r:Math.random()*6,bubble:Math.random()<.18})}
+  spawn(140);
+  (function tick(t){
+    ctx.clearRect(0,0,innerWidth,innerHeight);
+    if(t<end && parts.length<400) spawn(3);
+    for(let i=parts.length-1;i>=0;i--){
+      const p=parts[i]; p.x+=p.vx+Math.sin((t/400)+p.r)*.6; p.y+=p.vy; p.r+=.05;
+      if(p.bubble){ctx.strokeStyle='rgba(180,230,255,.7)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(p.x,p.y,p.s,0,7);ctx.stroke()}
+      else{ctx.fillStyle=p.c;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.r);ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*.6);ctx.restore()}
+      if(p.y>innerHeight+30) parts.splice(i,1);
+    }
+    if(parts.length || t<end) requestAnimationFrame(tick); else ctx.clearRect(0,0,innerWidth,innerHeight);
+  })(performance.now());
+}
+
+/* -------- wire up -------- */
+$('howBtn').onclick=()=>{$('how').classList.toggle('on'); $('howBtn').textContent=($('how').classList.contains('on')?'▼':'►')+' HOW TO PLAY'};
+$('beginBtn').onclick=begin;
+$('inputRow').addEventListener('submit',e=>{e.preventDefault(); if($('answer').value.trim()) submit(false)});
+
+// secret reset for the host: add #reset-dive to the URL
+if(location.hash==='#reset-dive' || location.hash==='#reset'){ store.clear(); history.replaceState(null,'',location.pathname+location.search); }
+
+camera(0);
+const saved=store.get();
+if(saved){ showReveal(saved, true); }
+})();
+</script>
+</body>
+</html>
